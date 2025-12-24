@@ -1,0 +1,161 @@
+````md
+# Slack → Dify Chatbot (Socket Mode)
+
+This project is a small Slack bot that listens for **@mentions** and forwards the user’s message to a **Dify agent**.
+It then posts Dify’s response back into the **same Slack thread**.
+
+It also keeps **conversation context per Slack thread**, so replies in the same thread continue the same Dify conversation.
+
+---
+
+## What it does
+
+- ✅ Listens for `app_mention` events in Slack (when someone types `@yourbot ...`)
+- ✅ Removes the Slack mention token (`<@U123...>`) from the text
+- ✅ Sends the cleaned text to Dify’s `POST /v1/chat-messages` endpoint
+- ✅ Uses **streaming mode** (SSE) and parses the `data: {...}` lines into JSON events
+- ✅ Chooses the **latest** `agent_thought` event and posts its `thought` to Slack
+  - If no `agent_thought` is found, it falls back to the streamed `agent_message` chunks
+- ✅ Stores a mapping of:
+  - `Slack thread (channel + thread_ts)` → `Dify conversation_id`
+
+---
+
+## Requirements
+
+- Python 3.10+ recommended
+- A Slack App configured for **Socket Mode**
+- A Dify instance (cloud or self-hosted) with an API key
+
+---
+
+## Setup locally
+
+### 1) Clone and enter the folder
+```bash
+git clone <your-repo-url>
+cd slack_chatbot
+````
+
+### 2) Create and activate a virtual environment (Windows example)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+```
+
+### 3) Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4) Create your `.env` file
+
+In the same folder as `main.py`, create a file named `.env`:
+
+```env
+APP_TOKEN=xapp-...
+BOT_TOKEN=xoxb-...
+DIFY_API_KEY=...
+DIFY_BASE_URL=https://api.dify.ai
+```
+
+> The code loads `.env` from the same directory as `main.py`.
+
+### 5) Run the bot
+
+```bash
+python main.py
+```
+
+If everything is correct, the bot will connect to Slack via Socket Mode and start listening.
+
+---
+
+## Slack App configuration (quick checklist)
+
+In your Slack App settings:
+
+1. **Socket Mode**
+
+   * Enable Socket Mode
+   * Generate an **App-Level Token** with the scope: `connections:write`
+   * This token is your `APP_TOKEN` (starts with `xapp-...`)
+
+2. **OAuth & Permissions**
+
+   * Add these bot token scopes (common minimum):
+
+     * `app_mentions:read`
+     * `chat:write`
+   * Install the app to your workspace
+   * Copy the **Bot User OAuth Token** as `BOT_TOKEN` (starts with `xoxb-...`)
+
+3. **Event Subscriptions**
+
+   * Enable Events
+   * Subscribe to **Bot Events**:
+
+     * `app_mention`
+
+---
+
+## Environment variables
+
+These variables must exist in your `.env`:
+
+| Variable        | Example / Notes                                                          |
+| --------------- | ------------------------------------------------------------------------ |
+| `APP_TOKEN`     | Slack Socket Mode app token (`xapp-...`)                                 |
+| `BOT_TOKEN`     | Slack bot token (`xoxb-...`)                                             |
+| `DIFY_API_KEY`  | Dify API key (Bearer token)                                              |
+| `DIFY_BASE_URL` | Base URL for Dify, e.g. `https://api.dify.ai` or your self-hosted domain |
+
+---
+
+## How replies and context work
+
+Slack threads are used like “chat sessions”.
+
+* Each Slack thread has a unique `thread_ts`
+* The bot stores a mapping:
+
+  * `channel:thread_ts` → `conversation_id`
+* So if you keep talking in the same Slack thread, the bot continues the same Dify conversation.
+
+> Note: this mapping is currently stored **in memory**, so restarting the bot resets it.
+
+---
+
+## Security notes
+
+* ✅ `.env` should NOT be committed to GitHub
+* Add `.env` to your `.gitignore` (recommended)
+
+You can optionally commit a safe template file named `.env.example` so others know which variables are required.
+
+---
+
+## Troubleshooting
+
+### `KeyError: 'APP_TOKEN'` (or other env var)
+
+* Make sure you have a `.env` file next to `main.py`
+* Make sure you installed `python-dotenv`
+* Make sure the variable names match exactly (`APP_TOKEN`, not `APP-TOKEN`, etc.)
+
+### Bot connects but doesn’t respond
+
+* Confirm your Slack App has the `app_mention` event subscribed
+* Confirm the bot has `chat:write` scope and is installed to the workspace
+* Mention the bot like: `@yourbot hello`
+
+---
+
+## License
+
+Use however you like (add your preferred license here).
+
+```
+```
